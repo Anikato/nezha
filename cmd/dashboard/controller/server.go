@@ -177,11 +177,11 @@ func forceUpdateServer(c *gin.Context) (*model.ServerTaskResponse, error) {
 
 	for _, sid := range forceUpdateServers {
 		server, _ := singleton.ServerShared.Get(sid)
-		if server != nil && server.TaskStream != nil {
+		if server != nil && server.HasTaskStream() {
 			if !server.HasPermission(c) {
 				return nil, singleton.Localizer.ErrorT("permission denied")
 			}
-			if err := server.TaskStream.Send(&pb.Task{
+			if err := server.SendTask(&pb.Task{
 				Type: model.TaskTypeUpgrade,
 			}); err != nil {
 				forceUpdateResp.Failure = append(forceUpdateResp.Failure, sid)
@@ -213,7 +213,7 @@ func getServerConfig(c *gin.Context) (string, error) {
 	}
 
 	s, ok := singleton.ServerShared.Get(id)
-	if !ok || s.TaskStream == nil {
+	if !ok || !s.HasTaskStream() {
 		return "", nil
 	}
 
@@ -221,7 +221,7 @@ func getServerConfig(c *gin.Context) (string, error) {
 		return "", singleton.Localizer.ErrorT("permission denied")
 	}
 
-	if err := s.TaskStream.Send(&pb.Task{
+	if err := s.SendTask(&pb.Task{
 		Type: model.TaskTypeReportConfig,
 	}); err != nil {
 		return "", err
@@ -269,7 +269,7 @@ func setServerConfig(c *gin.Context) (*model.ServerTaskResponse, error) {
 			if !s.HasPermission(c) {
 				return nil, singleton.Localizer.ErrorT("permission denied")
 			}
-			if s.TaskStream == nil {
+			if !s.HasTaskStream() {
 				resp.Offline = append(resp.Offline, s.ID)
 				continue
 			}
@@ -293,7 +293,7 @@ func setServerConfig(c *gin.Context) (*model.ServerTaskResponse, error) {
 					Type: model.TaskTypeApplyConfig,
 					Data: configForm.Config,
 				}
-				if err := s.TaskStream.Send(task); err != nil {
+				if err := s.SendTask(task); err != nil {
 					respMu.Lock()
 					resp.Failure = append(resp.Failure, s.ID)
 					respMu.Unlock()

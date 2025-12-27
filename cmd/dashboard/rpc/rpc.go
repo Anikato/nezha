@@ -10,6 +10,7 @@ import (
 
 	"github.com/goccy/go-json"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 
@@ -22,7 +23,22 @@ import (
 )
 
 func ServeRPC() *grpc.Server {
-	server := grpc.NewServer(grpc.ChainUnaryInterceptor(getRealIp, waf))
+	// 配置 Keepalive 策略
+	kaep := keepalive.EnforcementPolicy{
+		MinTime:             5 * time.Second, // 允许客户端每 5s ping 一次
+		PermitWithoutStream: true,
+	}
+	kasp := keepalive.ServerParameters{
+		MaxConnectionIdle: 15 * time.Minute, // 空闲 15 分钟断开
+		Time:              20 * time.Second, // 每 20s 探测一次
+		Timeout:           5 * time.Second,  // 探测超时 5s
+	}
+
+	server := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(getRealIp, waf),
+		grpc.KeepaliveEnforcementPolicy(kaep),
+		grpc.KeepaliveParams(kasp),
+	)
 	rpcService.NezhaHandlerSingleton = rpcService.NewNezhaHandler()
 	proto.RegisterNezhaServiceServer(server, rpcService.NezhaHandlerSingleton)
 	return server
@@ -89,22 +105,22 @@ func DispatchTask(serviceSentinelDispatchBus <-chan *model.Service) {
 				}
 
 				server, _ := singleton.ServerShared.Get(id)
-				if server == nil || server.TaskStream == nil {
+				if server == nil || !server.HasTaskStream() {
 					continue
 				}
 
 				if canSendTaskToServer(task, server) {
-					server.TaskStream.Send(task.PB())
+					_ = server.SendTask(task.PB())
 				}
 			}
 		case model.ServiceCoverAll:
 			for id, server := range singleton.ServerShared.Range {
-				if server == nil || server.TaskStream == nil || task.SkipServers[id] {
+				if server == nil || !server.HasTaskStream() || task.SkipServers[id] {
 					continue
 				}
 
 				if canSendTaskToServer(task, server) {
-					server.TaskStream.Send(task.PB())
+					_ = server.SendTask(task.PB())
 				}
 			}
 		}
@@ -115,17 +131,17 @@ func DispatchKeepalive() {
 	singleton.CronShared.AddFunc("@every 20s", func() {
 		list := singleton.ServerShared.GetSortedList()
 		for _, s := range list {
-			if s == nil || s.TaskStream == nil {
+			if s == nil || !s.HasTaskStream() {
 				continue
 			}
-			s.TaskStream.Send(&proto.Task{Type: model.TaskTypeKeepalive})
+			_ = s.SendTask(&proto.Task{Type: model.TaskTypeKeepalive})
 		}
 	})
 }
 
 func ServeNAT(w http.ResponseWriter, r *http.Request, natConfig *model.NAT) {
 	server, _ := singleton.ServerShared.Get(natConfig.ServerID)
-	if server == nil || server.TaskStream == nil {
+	if server == nil || !server.HasTaskStream() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		w.Write([]byte("server not found or not connected"))
 		return
@@ -151,7 +167,7 @@ func ServeNAT(w http.ResponseWriter, r *http.Request, natConfig *model.NAT) {
 		return
 	}
 
-	if err := server.TaskStream.Send(&proto.Task{
+	if err := server.SendTask(&proto.Task{
 		Type: model.TaskTypeNAT,
 		Data: string(taskData),
 	}); err != nil {

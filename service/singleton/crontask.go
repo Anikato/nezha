@@ -141,18 +141,19 @@ func CronTrigger(cr *model.Cron, triggerServer ...uint64) func() {
 				return
 			}
 			if s, ok := ServerShared.Get(triggerServer[0]); ok {
-				if s.TaskStream != nil {
-					s.TaskStream.Send(&pb.Task{
+				if s.HasTaskStream() {
+					if err := s.SendTask(&pb.Task{
 						Id:   cr.ID,
 						Data: cr.Command,
 						Type: model.TaskTypeCommand,
-					})
-				} else {
-					// 保存当前服务器状态信息
-					curServer := model.Server{}
-					copier.Copy(&curServer, s)
-					go NotificationShared.SendNotification(cr.NotificationGroupID, Localizer.Tf("[Task failed] %s: server %s is offline and cannot execute the task", cr.Name, s.Name), "", &curServer)
+					}); err == nil {
+						return
+					}
 				}
+				// 保存当前服务器状态信息
+				curServer := model.Server{}
+				copier.Copy(&curServer, s)
+				go NotificationShared.SendNotification(cr.NotificationGroupID, Localizer.Tf("[Task failed] %s: server %s is offline and cannot execute the task", cr.Name, s.Name), "", &curServer)
 			}
 			return
 		}
@@ -164,18 +165,19 @@ func CronTrigger(cr *model.Cron, triggerServer ...uint64) func() {
 			if cr.Cover == model.CronCoverIgnoreAll && !crIgnoreMap[s.ID] {
 				continue
 			}
-			if s.TaskStream != nil {
-				s.TaskStream.Send(&pb.Task{
+			if s.HasTaskStream() {
+				if err := s.SendTask(&pb.Task{
 					Id:   cr.ID,
 					Data: cr.Command,
 					Type: model.TaskTypeCommand,
-				})
-			} else {
-				// 保存当前服务器状态信息
-				curServer := model.Server{}
-				copier.Copy(&curServer, s)
-				go NotificationShared.SendNotification(cr.NotificationGroupID, Localizer.Tf("[Task failed] %s: server %s is offline and cannot execute the task", cr.Name, s.Name), "", &curServer)
+				}); err == nil {
+					continue
+				}
 			}
+			// 保存当前服务器状态信息
+			curServer := model.Server{}
+			copier.Copy(&curServer, s)
+			go NotificationShared.SendNotification(cr.NotificationGroupID, Localizer.Tf("[Task failed] %s: server %s is offline and cannot execute the task", cr.Name, s.Name), "", &curServer)
 		}
 	}
 }

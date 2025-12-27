@@ -4,6 +4,9 @@
 # master install script redirect
 #========================================================
 
+# Custom Repository URL
+GITHUB_URL="https://raw.githubusercontent.com/Anikato/nezha-scripts"
+
 # Default: Guide users to use master branch v1 new panel installation script
 # However, if install_agent parameter is used, redirect to v0 by default
 if echo "$@" | grep -q "install_agent"; then
@@ -28,11 +31,11 @@ fi
 
 if [ "$is_v1" = true ]; then
     echo "Will use v1 panel installation script..."
-    shell_url="https://raw.githubusercontent.com/nezhahq/scripts/main/install_en.sh"
+    shell_url="${GITHUB_URL}/main/install_en.sh"
     file_name="nezha.sh"
 else
     echo "Will use v0 panel installation script, script will be downloaded as nezha_v0.sh"
-    shell_url="https://raw.githubusercontent.com/nezhahq/scripts/refs/heads/v0/install_en.sh"
+    shell_url="${GITHUB_URL}/refs/heads/v0/install_en.sh"
     file_name="nezha_v0.sh"
 fi
 

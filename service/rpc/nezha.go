@@ -43,8 +43,17 @@ func (s *NezhaHandler) RequestTask(stream pb.NezhaService_RequestTaskServer) err
 		return err
 	}
 
-	server, _ := singleton.ServerShared.Get(clientID)
-	server.TaskStream = stream
+	server, ok := singleton.ServerShared.Get(clientID)
+	if !ok || server == nil {
+		return errors.New("server not found")
+	}
+	server.SetTaskStream(stream)
+	defer func() {
+		srv, ok := singleton.ServerShared.Get(clientID)
+		if ok && srv != nil {
+			srv.ClearTaskStreamIfMatch(stream)
+		}
+	}()
 	var result *pb.TaskResult
 	for {
 		result, err = stream.Recv()

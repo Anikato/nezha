@@ -1,8 +1,10 @@
 package model
 
 import (
+	"errors"
 	"log"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -32,6 +34,7 @@ type Server struct {
 	GeoIP      *GeoIP     `gorm:"-" json:"geoip,omitempty"`
 	LastActive time.Time  `gorm:"-" json:"last_active,omitempty"`
 
+	taskStreamMu sync.RWMutex
 	TaskStream  pb.NezhaService_RequestTaskServer `gorm:"-" json:"-"`
 	ConfigCache chan any                          `gorm:"-" json:"-"`
 
@@ -46,12 +49,52 @@ func InitServer(s *Server) {
 	s.ConfigCache = make(chan any, 1)
 }
 
+func (s *Server) HasTaskStream() bool {
+	s.taskStreamMu.RLock()
+	defer s.taskStreamMu.RUnlock()
+	return s.TaskStream != nil
+}
+
+func (s *Server) SetTaskStream(stream pb.NezhaService_RequestTaskServer) {
+	s.taskStreamMu.Lock()
+	s.TaskStream = stream
+	s.taskStreamMu.Unlock()
+}
+
+func (s *Server) ClearTaskStreamIfMatch(stream pb.NezhaService_RequestTaskServer) {
+	s.taskStreamMu.Lock()
+	if s.TaskStream == stream {
+		s.TaskStream = nil
+	}
+	s.taskStreamMu.Unlock()
+}
+
+func (s *Server) SendTask(task *pb.Task) error {
+	if task == nil {
+		return errors.New("task is nil")
+	}
+
+	s.taskStreamMu.Lock()
+	defer s.taskStreamMu.Unlock()
+
+	if s.TaskStream == nil {
+		return errors.New("task stream not connected")
+	}
+	if err := s.TaskStream.Send(task); err != nil {
+		s.TaskStream = nil
+		return err
+	}
+	return nil
+}
+
 func (s *Server) CopyFromRunningServer(old *Server) {
 	s.Host = old.Host
 	s.State = old.State
 	s.GeoIP = old.GeoIP
 	s.LastActive = old.LastActive
+	old.taskStreamMu.RLock()
 	s.TaskStream = old.TaskStream
+	old.taskStreamMu.RUnlock()
 	s.ConfigCache = old.ConfigCache
 	s.PrevTransferInSnapshot = old.PrevTransferInSnapshot
 	s.PrevTransferOutSnapshot = old.PrevTransferOutSnapshot

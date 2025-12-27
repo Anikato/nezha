@@ -33,7 +33,7 @@ func createFM(c *gin.Context) (*model.CreateFMResponse, error) {
 	}
 
 	server, _ := singleton.ServerShared.Get(id)
-	if server == nil || server.TaskStream == nil {
+	if server == nil || !server.HasTaskStream() {
 		return nil, singleton.Localizer.ErrorT("server not found or not connected")
 	}
 
@@ -51,7 +51,7 @@ func createFM(c *gin.Context) (*model.CreateFMResponse, error) {
 	fmData, _ := json.Marshal(&model.TaskFM{
 		StreamID: streamId,
 	})
-	if err := server.TaskStream.Send(&proto.Task{
+	if err := server.SendTask(&proto.Task{
 		Type: model.TaskTypeFM,
 		Data: string(fmData),
 	}); err != nil {
