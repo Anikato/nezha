@@ -1,7 +1,7 @@
 - path: "admin-dist"
   name: "OfficialAdmin"
-  repository: "https://github.com/nezhahq/admin-frontend"
-  author: "nezhahq"
+  repository: "https://github.com/Anikato/nezha-admin-frontend"
+  author: "Anikato"
   version: "v1.14.4"
   is_admin: true
   is_official: true
