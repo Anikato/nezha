@@ -23,6 +23,12 @@
 - [English](https://nezhahq.github.io/en_US/index.html)
 - [中文文档](https://nezhahq.github.io/index.html)
 
+## Installation
+
+```bash
+curl -L https://raw.githubusercontent.com/Anikato/nezha-scripts/main/install.sh -o nezha.sh && chmod +x nezha.sh && sudo ./nezha.sh
+```
+
 ## Contributing
 
 ### Translation
